@@ -1,0 +1,151 @@
+using System;
+using System.Data.SQLite;
+
+namespace TeslaRentalPlatform
+{
+    class Program
+    {
+        static string connectionString = "Data Source=teslarental.db;Version=3;";
+        
+        static void Main(string[] args)
+        {
+            InitializeDatabase();
+
+            Console.WriteLine("Tesla Car Rental Platform");
+            Console.WriteLine("-------------------------");
+
+            AddCar(1, "Model 3", 20, 0.5);
+            AddClient(1, "Argons Berzins", "argons.berzins@yahoo.ru");
+            RentCar(1, 1, 2, 150);
+        }
+
+        static void InitializeDatabase()
+        {
+            using (var connection = new SQLiteConnection(connectionString))
+            {
+                connection.Open();
+
+                string createCarsTable = @"CREATE TABLE IF NOT EXISTS Cars (
+                    ID INTEGER PRIMARY KEY, 
+                    Model TEXT, 
+                    HourlyRate REAL, 
+                    KilometerRate REAL
+                )";
+
+                string createClientsTable = @"CREATE TABLE IF NOT EXISTS Clients (
+                    ID INTEGER PRIMARY KEY, 
+                    Name TEXT, 
+                    Email TEXT
+                )";
+
+                string createRentalsTable = @"CREATE TABLE IF NOT EXISTS Rentals (
+                    ID INTEGER PRIMARY KEY AUTOINCREMENT, 
+                    ClientID INTEGER, 
+                    CarID INTEGER, 
+                    RentalHours INTEGER, 
+                    KilometersDriven REAL, 
+                    TotalCost REAL,
+                    FOREIGN KEY(ClientID) REFERENCES Clients(ID),
+                    FOREIGN KEY(CarID) REFERENCES Cars(ID)
+                )";
+
+                ExecuteNonQuery(connection, createCarsTable);
+                ExecuteNonQuery(connection, createClientsTable);
+                ExecuteNonQuery(connection, createRentalsTable);
+            }
+        }
+
+        static void AddCar(int id, string model, double hourlyRate, double kilometerRate)
+        {
+            using (var connection = new SQLiteConnection(connectionString))
+            {
+                connection.Open();
+                string insertCar = "INSERT INTO Cars (ID, Model, HourlyRate, KilometerRate) VALUES (@id, @model, @hourlyRate, @kilometerRate)";
+                
+                using (var command = new SQLiteCommand(insertCar, connection))
+                {
+                    command.Parameters.AddWithValue("@id", id);
+                    command.Parameters.AddWithValue("@model", model);
+                    command.Parameters.AddWithValue("@hourlyRate", hourlyRate);
+                    command.Parameters.AddWithValue("@kilometerRate", kilometerRate);
+                    command.ExecuteNonQuery();
+                }
+
+                Console.WriteLine($"Car {model} added successfully!");
+            }
+        }
+
+        static void AddClient(int id, string name, string email)
+        {
+            using (var connection = new SQLiteConnection(connectionString))
+            {
+                connection.Open();
+                string insertClient = "INSERT INTO Clients (ID, Name, Email) VALUES (@id, @name, @email)";
+
+                using (var command = new SQLiteCommand(insertClient, connection))
+                {
+                    command.Parameters.AddWithValue("@id", id);
+                    command.Parameters.AddWithValue("@name", name);
+                    command.Parameters.AddWithValue("@email", email);
+                    command.ExecuteNonQuery();
+                }
+
+                Console.WriteLine($"Client {name} registered successfully!");
+            }
+        }
+
+        static void RentCar(int clientId, int carId, int rentalHours, double kilometersDriven)
+        {
+            using (var connection = new SQLiteConnection(connectionString))
+            {
+                connection.Open();
+
+                string fetchRates = "SELECT HourlyRate, KilometerRate FROM Cars WHERE ID = @carId";
+                double hourlyRate = 0, kilometerRate = 0;
+
+                using (var command = new SQLiteCommand(fetchRates, connection))
+                {
+                    command.Parameters.AddWithValue("@carId", carId);
+                    using (var reader = command.ExecuteReader())
+                    {
+                        if (reader.Read())
+                        {
+                            hourlyRate = reader.GetDouble(0);
+                            kilometerRate = reader.GetDouble(1);
+                        }
+                        else
+                        {
+                            Console.WriteLine("Car not found!");
+                            return;
+                        }
+                    }
+                }
+
+                double totalCost = (rentalHours * hourlyRate) + (kilometersDriven * kilometerRate);
+
+                string insertRental = @"INSERT INTO Rentals (ClientID, CarID, RentalHours, KilometersDriven, TotalCost) 
+                                        VALUES (@clientId, @carId, @rentalHours, @kilometersDriven, @totalCost)";
+
+                using (var command = new SQLiteCommand(insertRental, connection))
+                {
+                    command.Parameters.AddWithValue("@clientId", clientId);
+                    command.Parameters.AddWithValue("@carId", carId);
+                    command.Parameters.AddWithValue("@rentalHours", rentalHours);
+                    command.Parameters.AddWithValue("@kilometersDriven", kilometersDriven);
+                    command.Parameters.AddWithValue("@totalCost", totalCost);
+                    command.ExecuteNonQuery();
+                }
+
+                Console.WriteLine($"Rental Complete! Total Cost: €{totalCost:F2}");
+            }
+        }
+
+        static void ExecuteNonQuery(SQLiteConnection connection, string query)
+        {
+            using (var command = new SQLiteCommand(query, connection))
+            {
+                command.ExecuteNonQuery();
+            }
+        }
+    }
+}
